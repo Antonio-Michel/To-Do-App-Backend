@@ -28,7 +28,7 @@ public class ToDoController {
 
     @CrossOrigin
     @GetMapping("/todos")
-    public ResponseEntity<List<ToDo>> getAllToDos(
+    public ResponseEntity<HashMap<String, List>> getAllToDos(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) Long done,
             @RequestParam(required = false) Integer priority,
@@ -38,7 +38,25 @@ public class ToDoController {
         try {
             List<ToDo> todos = new ArrayList<ToDo>();
 
-            int pageSize = 3;
+            //time metrics
+            List<ToDo> allTodos = new ArrayList<ToDo>(toDoService.findAll());
+            Double lowAvg = (Double) toDoService.findAvgByPriority(allTodos, 0);
+            Double medAvg = toDoService.findAvgByPriority(allTodos, 1);
+            Double highAvg = toDoService.findAvgByPriority(allTodos, 2);
+            Double totalAvg = toDoService.findAvg(allTodos);
+
+            List<Double> averages = new ArrayList<Double>();
+            averages.add(lowAvg);
+            averages.add(medAvg);
+            averages.add(highAvg);
+            averages.add(totalAvg);
+
+            HashMap<String, List> items = new HashMap<>();
+
+            items.put("avgTimes",averages);
+
+            //pagination variables
+            int pageSize = 10; //would be nice to have the client send the page size desired
             if(page == null)
             {page = 0;}
             else if (page > 0) {
@@ -70,24 +88,24 @@ public class ToDoController {
             }
 
             //sort cases
-            if (sortByPriority != null && sortByDueDate != null) {
+            if (validateSort(sortByPriority) && validateSort(sortByDueDate)) {
                 //sort by both, starting on priority
                 Comparator<ToDo> toDoComparator;
                 if(sortByDueDate.equals("ASC") && sortByPriority.equals("ASC")) {
-                    toDoComparator = Comparator.comparing(ToDo::getDueDate)
+                    toDoComparator = Comparator.comparing(ToDo::getDueDate, Comparator.nullsLast(Comparator.naturalOrder()))
                             .thenComparing(ToDo::getPriority);
                 } else if ( sortByDueDate.equals("DESC") && sortByPriority.equals("ASC")) {
-                    toDoComparator = Comparator.comparing(ToDo::getDueDate).reversed()
+                    toDoComparator = Comparator.comparing(ToDo::getDueDate, Comparator.nullsFirst(Comparator.naturalOrder())).reversed()
                             .thenComparing(ToDo::getPriority);
                 } else if ( sortByDueDate.equals("ASC") && sortByPriority.equals("DESC")) {
-                    toDoComparator = Comparator.comparing(ToDo::getDueDate)
+                    toDoComparator = Comparator.comparing(ToDo::getDueDate, Comparator.nullsFirst(Comparator.naturalOrder()))
                             .thenComparing(ToDo::getPriority).reversed();
                 } else {
-                    toDoComparator = Comparator.comparing(ToDo::getDueDate).reversed()
+                    toDoComparator = Comparator.comparing(ToDo::getDueDate, Comparator.nullsFirst(Comparator.naturalOrder())).reversed()
                             .thenComparing(ToDo::getPriority).reversed();
                 }
                 todos.sort(toDoComparator);
-            } else if ( sortByPriority != null) {
+            } else if (validateSort(sortByPriority)) {
                 switch (sortByPriority) {
                     case "ASC":
                         todos.sort(Comparator.comparing(ToDo::getPriority));
@@ -98,13 +116,13 @@ public class ToDoController {
                     default:
                         break;
                 }
-            } else if ( sortByDueDate != null) {
+            } else if (validateSort(sortByDueDate)) {
                 switch (sortByDueDate) {
                     case "ASC":
-                        todos.sort(Comparator.comparing(ToDo::getDueDate));
+                        todos.sort(Comparator.comparing(ToDo::getDueDate, Comparator.nullsLast(Comparator.naturalOrder())));
                         break;
                     case "DESC":
-                        todos.sort(Comparator.comparing(ToDo::getDueDate).reversed());
+                        todos.sort(Comparator.comparing(ToDo::getDueDate, Comparator.nullsFirst(Comparator.naturalOrder())).reversed());
                         break;
                     default:
                         break;
@@ -116,11 +134,25 @@ public class ToDoController {
             }
             List<ToDo> pagedTodos = new ArrayList<ToDo>();
             int totalTodos = todos.size();
+            double pages = Math.ceil((double)totalTodos/(double)pageSize);
+            int totalPages = (int) pages;
             pagedTodos = todos.subList(offset, Math.min(((page+1) * pageSize), totalTodos));
-            return new ResponseEntity<>(pagedTodos, HttpStatus.OK);
+
+            List<Integer> sizeAndPage = new ArrayList<Integer>();
+            sizeAndPage.add(totalTodos);
+            sizeAndPage.add(totalPages);
+
+            items.put("results",pagedTodos);
+            items.put("size", sizeAndPage);
+            return new ResponseEntity<>(items, HttpStatus.OK);
         } catch (Exception e) {
+            System.out.println(e.toString());
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    public boolean validateSort(String sort) {
+        return sort != null && !sort.isEmpty();
     }
 
     @CrossOrigin
@@ -154,9 +186,9 @@ public class ToDoController {
 
         if(_todo != null) {
             _todo.setName(todo.getName());
-            //_todo.setDone(todo.isDone());
             _todo.setPriority(todo.getPriority());
             _todo.setDueDate(todo.getDueDate());
+            _todo.setUrgency();
             return new ResponseEntity<>(toDoService.save(_todo), HttpStatus.OK);
         } else {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);

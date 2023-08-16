@@ -1,5 +1,6 @@
 package com.example.spring_todo_list.model;
 
+import java.time.Duration;
 import java.util.Date;
 import java.util.UUID;
 
@@ -19,6 +20,8 @@ public class ToDo {
     private int priority;
 
     private final Date createdOn;
+
+    private int urgency;
 
     public ToDo (String name, Date dueDate, boolean done, int priority) {
         this.name = name;
@@ -81,6 +84,24 @@ public class ToDo {
 
     public Date getCreatedOn() {
         return createdOn;
+    }
+
+    public int getUrgency() {
+        return this.urgency;
+    }
+    public void setUrgency() {
+        this.urgency = 0;
+        if(this.dueDate != null) {
+            long diff = (this.dueDate.getTime() - new Date().getTime());
+            float days = (float) diff / 1000 / 3600 / 24;
+            if (days < 7) {
+                this.urgency = 1;
+            } else if (days < 14) {
+                this.urgency = 2;
+            } else {
+                this.urgency = 3;
+            }
+        }
     }
 
 
